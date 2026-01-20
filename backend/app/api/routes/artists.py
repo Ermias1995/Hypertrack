@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models.artist import Artist
+from app.models.artist import Artist, Snapshot
 from app.schemas.artist import ArtistCreate, ArtistRead, ArtistQueryRequest
+from app.schemas.snapshot import SnapshotRead
 
 
 router = APIRouter(prefix="/artists", tags=["artists"])
@@ -38,6 +39,23 @@ def get_artist(artist_id: int, db: Session = Depends(get_db)):
     return artist
 
 
+@router.get("/{artist_id}/history", response_model=list[SnapshotRead])
+def get_artist_history(artist_id: int, db: Session = Depends(get_db)):
+    artist = db.query(Artist).filter(Artist.id == artist_id).first()
+    if not artist:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Artist not found",
+        )
+    snapshots = (
+        db.query(Snapshot)
+        .filter(Snapshot.artist_id == artist_id)
+        .order_by(Snapshot.snapshot_time.desc())
+        .all()
+    )
+    return snapshots
+
+
 @router.post("/query", response_model=ArtistRead)
 def query_artist(payload: ArtistQueryRequest, db: Session = Depends(get_db)):
     url = payload.spotify_url.strip()
@@ -61,6 +79,15 @@ def query_artist(payload: ArtistQueryRequest, db: Session = Depends(get_db)):
             spotify_url=url,
         )
         db.add(artist)
+        db.flush()
+
+    snapshot = Snapshot(
+        artist_id=artist.id,
+        total_playlists_found=0,
+        playlists_checked_count=0,
+        discovery_method_used="initial",
+    )
+    db.add(snapshot)
 
     db.commit()
     db.refresh(artist)
