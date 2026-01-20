@@ -2,9 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models.artist import Artist, Snapshot
+from app.models.artist import Artist
+from app.models.snapshot import Snapshot
+from app.models.placement import Placement
 from app.schemas.artist import ArtistCreate, ArtistRead, ArtistQueryRequest
 from app.schemas.snapshot import SnapshotRead
+from app.services.discovery import discover_playlists, get_or_create_playlist
+from app.services.diffing import calculate_changes
+from app.services.spotify_client import get_artist as get_spotify_artist
 
 
 router = APIRouter(prefix="/artists", tags=["artists"])
@@ -70,24 +75,62 @@ def query_artist(payload: ArtistQueryRequest, db: Session = Depends(get_db)):
     if artist and not payload.force_refresh:
         return artist
 
-    if artist and payload.force_refresh:
-        artist.spotify_url = url
-    else:
+    try:
+        spotify_artist_data = get_spotify_artist(spotify_id)
+        artist_name = spotify_artist_data["name"]
+    except Exception:
+        artist_name = spotify_id
+
+    if not artist:
         artist = Artist(
             spotify_artist_id=spotify_id,
-            name=spotify_id,
+            name=artist_name,
             spotify_url=url,
         )
         db.add(artist)
         db.flush()
 
+    if payload.force_refresh:
+        artist.name = artist_name
+        artist.spotify_url = url
+
+    previous_snapshot = (
+        db.query(Snapshot)
+        .filter(Snapshot.artist_id == artist.id)
+        .order_by(Snapshot.snapshot_time.desc())
+        .first()
+    )
+
+    discovered_playlists = discover_playlists(spotify_id, db)
+    
     snapshot = Snapshot(
         artist_id=artist.id,
-        total_playlists_found=0,
-        playlists_checked_count=0,
-        discovery_method_used="initial",
+        total_playlists_found=len(discovered_playlists),
+        playlists_checked_count=len(discovered_playlists),
+        discovery_method_used="hybrid",
     )
     db.add(snapshot)
+    db.flush()
+    
+    artist.last_snapshot_at = snapshot.snapshot_time
+
+    for playlist_data in discovered_playlists:
+        playlist = get_or_create_playlist(
+            spotify_playlist_id=playlist_data["spotify_playlist_id"],
+            name=playlist_data["name"],
+            owner_id=playlist_data.get("owner_id"),
+            owner_name=playlist_data.get("owner_name"),
+            follower_count=playlist_data.get("follower_count"),
+            db=db,
+        )
+
+        placement = Placement(
+            artist_id=artist.id,
+            playlist_id=playlist.id,
+            snapshot_id=snapshot.id,
+            tracks_count=playlist_data.get("tracks_count", 1),
+        )
+        db.add(placement)
 
     db.commit()
     db.refresh(artist)

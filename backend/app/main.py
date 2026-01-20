@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.db.init_db import init_db
-from app.api.routes import artists
+from app.api.routes import artists, playlists
 from app.core.security import ApiKeyDependency
 
 app = FastAPI(
@@ -27,6 +27,12 @@ async def startup_event():
 
 app.include_router(
     artists.router,
+    prefix="/api",
+    dependencies=[ApiKeyDependency],
+)
+
+app.include_router(
+    playlists.router,
     prefix="/api",
     dependencies=[ApiKeyDependency],
 )

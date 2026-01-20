@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     PORT: int = 8000
     DATABASE_URL: str = "sqlite:///./artist_tracker.db"
     
+    SPOTIFY_CLIENT_ID: str = ""
+    SPOTIFY_CLIENT_SECRET: str = ""
+    
     class Config:
         env_file = ".env"
         case_sensitive = True
