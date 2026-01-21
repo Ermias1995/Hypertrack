@@ -1,7 +1,7 @@
 import base64
 import requests
 import time
-from typing import dict, List, Optional
+from typing import List, Optional
 from app.core.config import settings
 
 TOKEN_URL = "https://accounts.spotify.com/api/token"
