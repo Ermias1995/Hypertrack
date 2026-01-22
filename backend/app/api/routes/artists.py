@@ -7,13 +7,131 @@ from app.models.snapshot import Snapshot
 from app.models.placement import Placement
 from app.models.playlist import Playlist
 from app.schemas.artist import ArtistCreate, ArtistRead, ArtistQueryRequest, ArtistQueryResponse, PlaylistSummary
-from app.schemas.snapshot import SnapshotRead
+from app.schemas.snapshot import SnapshotRead, SnapshotWithChanges
 from app.services.discovery import discover_playlists, get_or_create_playlist
 from app.services.diffing import calculate_changes
 from app.services.spotify_client import get_artist as get_spotify_artist
 
 
 router = APIRouter(prefix="/artists", tags=["artists"])
+
+
+def _playlist_type_str(playlist):
+    return playlist.playlist_type.value if playlist.playlist_type else "user_generated"
+
+
+def _placements_to_summaries(placements, db):
+    out = []
+    for p in placements:
+        playlist = db.query(Playlist).filter(Playlist.id == p.playlist_id).first()
+        if playlist:
+            out.append(PlaylistSummary(
+                id=playlist.id,
+                name=playlist.name,
+                playlist_type=_playlist_type_str(playlist),
+                tracks_count=p.tracks_count,
+            ))
+    return out
+
+
+def _run_discovery_and_respond(artist, db, update_name_from_spotify=True):
+    spotify_id = artist.spotify_artist_id
+    if update_name_from_spotify:
+        try:
+            data = get_spotify_artist(spotify_id)
+            artist.name = data["name"]
+        except Exception:
+            pass
+
+    previous = (
+        db.query(Snapshot)
+        .filter(Snapshot.artist_id == artist.id)
+        .order_by(Snapshot.snapshot_time.desc())
+        .first()
+    )
+    discovered = discover_playlists(spotify_id, db)
+
+    snapshot = Snapshot(
+        artist_id=artist.id,
+        total_playlists_found=len(discovered),
+        playlists_checked_count=len(discovered),
+        discovery_method_used="hybrid",
+    )
+    db.add(snapshot)
+    db.flush()
+    artist.last_snapshot_at = snapshot.snapshot_time
+
+    for pl in discovered:
+        playlist = get_or_create_playlist(
+            spotify_playlist_id=pl["spotify_playlist_id"],
+            name=pl["name"],
+            owner_id=pl.get("owner_id"),
+            owner_name=pl.get("owner_name"),
+            follower_count=pl.get("follower_count"),
+            db=db,
+        )
+        placement = Placement(
+            artist_id=artist.id,
+            playlist_id=playlist.id,
+            snapshot_id=snapshot.id,
+            tracks_count=pl.get("tracks_count", 1),
+        )
+        db.add(placement)
+
+    db.commit()
+    db.refresh(artist)
+    db.refresh(snapshot)
+
+    gained_ids, lost_ids = calculate_changes(
+        previous.id if previous else None,
+        snapshot.id,
+        db,
+    )
+
+    gained = []
+    for pid in gained_ids:
+        pl = db.query(Playlist).filter(Playlist.id == pid).first()
+        pc = db.query(Placement).filter(
+            Placement.playlist_id == pid,
+            Placement.snapshot_id == snapshot.id,
+        ).first()
+        if pl and pc:
+            gained.append(PlaylistSummary(
+                id=pl.id,
+                name=pl.name,
+                playlist_type=_playlist_type_str(pl),
+                tracks_count=pc.tracks_count,
+            ))
+
+    lost = []
+    for pid in lost_ids:
+        pl = db.query(Playlist).filter(Playlist.id == pid).first()
+        if pl:
+            lost.append(PlaylistSummary(
+                id=pl.id,
+                name=pl.name,
+                playlist_type=_playlist_type_str(pl),
+                tracks_count=0,
+            ))
+
+    current_placements = (
+        db.query(Placement)
+        .filter(Placement.artist_id == artist.id)
+        .filter(Placement.snapshot_id == snapshot.id)
+        .all()
+    )
+    current_playlists = _placements_to_summaries(current_placements, db)
+
+    return ArtistQueryResponse(
+        artist=artist,
+        snapshot={
+            "id": snapshot.id,
+            "snapshot_time": snapshot.snapshot_time,
+            "total_playlists_found": snapshot.total_playlists_found,
+        },
+        changes={"gained": gained, "lost": lost},
+        current_playlists=current_playlists,
+    )
 
 
 @router.post("/", response_model=ArtistRead)
@@ -45,7 +163,7 @@ def get_artist(artist_id: int, db: Session = Depends(get_db)):
     return artist
 
 
-@router.get("/{artist_id}/history", response_model=list[SnapshotRead])
+@router.get("/{artist_id}/history", response_model=list[SnapshotWithChanges])
 def get_artist_history(artist_id: int, db: Session = Depends(get_db)):
     artist = db.query(Artist).filter(Artist.id == artist_id).first()
     if not artist:
@@ -59,7 +177,59 @@ def get_artist_history(artist_id: int, db: Session = Depends(get_db)):
         .order_by(Snapshot.snapshot_time.desc())
         .all()
     )
-    return snapshots
+    result = []
+    for i, s in enumerate(snapshots):
+        prev_id = snapshots[i + 1].id if i + 1 < len(snapshots) else None
+        gained_ids, lost_ids = calculate_changes(prev_id, s.id, db)
+        result.append(
+            SnapshotWithChanges(
+                id=s.id,
+                artist_id=s.artist_id,
+                snapshot_time=s.snapshot_time,
+                total_playlists_found=s.total_playlists_found,
+                playlists_checked_count=s.playlists_checked_count,
+                discovery_method_used=s.discovery_method_used,
+                gained_count=len(gained_ids),
+                lost_count=len(lost_ids),
+            )
+        )
+    return result
+
+
+@router.get("/{artist_id}/playlists", response_model=list[PlaylistSummary])
+def get_artist_playlists(artist_id: int, db: Session = Depends(get_db)):
+    artist = db.query(Artist).filter(Artist.id == artist_id).first()
+    if not artist:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Artist not found",
+        )
+    latest = (
+        db.query(Snapshot)
+        .filter(Snapshot.artist_id == artist_id)
+        .order_by(Snapshot.snapshot_time.desc())
+        .first()
+    )
+    if not latest:
+        return []
+    placements = (
+        db.query(Placement)
+        .filter(Placement.artist_id == artist_id)
+        .filter(Placement.snapshot_id == latest.id)
+        .all()
+    )
+    return _placements_to_summaries(placements, db)
+
+
+@router.post("/{artist_id}/refresh", response_model=ArtistQueryResponse)
+def refresh_artist(artist_id: int, db: Session = Depends(get_db)):
+    artist = db.query(Artist).filter(Artist.id == artist_id).first()
+    if not artist:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Artist not found",
+        )
+    return _run_discovery_and_respond(artist, db, update_name_from_spotify=True)
 
 
 @router.post("/query", response_model=ArtistQueryResponse)
@@ -87,18 +257,8 @@ def query_artist(payload: ArtistQueryRequest, db: Session = Depends(get_db)):
             .filter(Placement.snapshot_id == previous_snapshot.id)
             .all() if previous_snapshot else []
         )
-        
-        current_playlists = []
-        for placement in current_placements:
-            playlist = db.query(Playlist).filter(Playlist.id == placement.playlist_id).first()
-            if playlist:
-                current_playlists.append(PlaylistSummary(
-                    id=playlist.id,
-                    name=playlist.name,
-                    playlist_type=playlist.playlist_type.value if playlist.playlist_type else "user_generated",
-                    tracks_count=placement.tracks_count,
-                ))
-        
+        current_playlists = _placements_to_summaries(current_placements, db)
+
         return ArtistQueryResponse(
             artist=artist,
             snapshot={
@@ -129,109 +289,5 @@ def query_artist(payload: ArtistQueryRequest, db: Session = Depends(get_db)):
         artist.name = artist_name
         artist.spotify_url = url
 
-    previous_snapshot = (
-        db.query(Snapshot)
-        .filter(Snapshot.artist_id == artist.id)
-        .order_by(Snapshot.snapshot_time.desc())
-        .first()
-    )
-
-    discovered_playlists = discover_playlists(spotify_id, db)
-    
-    snapshot = Snapshot(
-        artist_id=artist.id,
-        total_playlists_found=len(discovered_playlists),
-        playlists_checked_count=len(discovered_playlists),
-        discovery_method_used="hybrid",
-    )
-    db.add(snapshot)
-    db.flush()
-    
-    artist.last_snapshot_at = snapshot.snapshot_time
-
-    for playlist_data in discovered_playlists:
-        playlist = get_or_create_playlist(
-            spotify_playlist_id=playlist_data["spotify_playlist_id"],
-            name=playlist_data["name"],
-            owner_id=playlist_data.get("owner_id"),
-            owner_name=playlist_data.get("owner_name"),
-            follower_count=playlist_data.get("follower_count"),
-            db=db,
-        )
-
-        placement = Placement(
-            artist_id=artist.id,
-            playlist_id=playlist.id,
-            snapshot_id=snapshot.id,
-            tracks_count=playlist_data.get("tracks_count", 1),
-        )
-        db.add(placement)
-
-    db.commit()
-    db.refresh(artist)
-    db.refresh(snapshot)
-
-    gained_ids, lost_ids = calculate_changes(
-        previous_snapshot.id if previous_snapshot else None,
-        snapshot.id,
-        db,
-    )
-
-    gained_playlists = []
-    for playlist_id in gained_ids:
-        playlist = db.query(Playlist).filter(Playlist.id == playlist_id).first()
-        placement = db.query(Placement).filter(
-            Placement.playlist_id == playlist_id,
-            Placement.snapshot_id == snapshot.id
-        ).first()
-        if playlist and placement:
-            gained_playlists.append(PlaylistSummary(
-                id=playlist.id,
-                name=playlist.name,
-                playlist_type=playlist.playlist_type.value,
-                tracks_count=placement.tracks_count,
-            ))
-
-    lost_playlists = []
-    for playlist_id in lost_ids:
-        playlist = db.query(Playlist).filter(Playlist.id == playlist_id).first()
-        if playlist:
-            lost_playlists.append(PlaylistSummary(
-                id=playlist.id,
-                name=playlist.name,
-                playlist_type=playlist.playlist_type.value if playlist.playlist_type else "user_generated",
-                tracks_count=0,
-            ))
-
-    current_placements = (
-        db.query(Placement)
-        .filter(Placement.artist_id == artist.id)
-        .filter(Placement.snapshot_id == snapshot.id)
-        .all()
-    )
-    
-    current_playlists = []
-    for placement in current_placements:
-        playlist = db.query(Playlist).filter(Playlist.id == placement.playlist_id).first()
-        if playlist:
-            current_playlists.append(PlaylistSummary(
-                id=playlist.id,
-                name=playlist.name,
-                playlist_type=playlist.playlist_type.value if playlist.playlist_type else "user_generated",
-                tracks_count=placement.tracks_count,
-            ))
-
-    return ArtistQueryResponse(
-        artist=artist,
-        snapshot={
-            "id": snapshot.id,
-            "snapshot_time": snapshot.snapshot_time,
-            "total_playlists_found": snapshot.total_playlists_found,
-        },
-        changes={
-            "gained": gained_playlists,
-            "lost": lost_playlists,
-        },
-        current_playlists=current_playlists,
-    )
+    return _run_discovery_and_respond(artist, db, update_name_from_spotify=True)
 
