@@ -72,7 +72,7 @@ def discover_playlists(artist_id: str, db: Session, max_playlists: int = 50) -> 
     for playlist_id, playlist_data in list(discovered.items())[:max_playlists]:
         try:
             full_playlist = get_playlist(playlist_id)
-            tracks = get_playlist_tracks(playlist_id, limit=100)
+            tracks = get_playlist_tracks(playlist_id, limit=100, artist_id=artist_id)
             
             artist_found = False
             tracks_count = 0
@@ -97,14 +97,14 @@ def discover_playlists(artist_id: str, db: Session, max_playlists: int = 50) -> 
             time.sleep(0.1)
         except Exception:
             continue
-    
+                
     return verified_playlists
 
 
 def get_or_create_playlist(
     spotify_playlist_id: str,
     name: str,
-    owner_id: str | None,
+    owner_id: str | None, 
     owner_name: str | None,
     follower_count: int | None,
     db: Session,
