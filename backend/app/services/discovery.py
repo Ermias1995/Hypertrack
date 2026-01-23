@@ -35,30 +35,50 @@ def discover_playlists(artist_id: str, db: Session, max_playlists: int = 50) -> 
     try:
         artist_data = get_artist(artist_id)
         artist_name = artist_data["name"]
-    except Exception:
+    except Exception as e:
+        print(f"Error getting artist {artist_id}: {e}")
         return []
     
     discovered = {}
     max_per_source = max_playlists // 2
     
+    # Search by artist name
     search_by_artist = f'artist:"{artist_name}"'
-    playlists_by_artist = search_playlists(search_by_artist, limit=max_per_source)
+    try:
+        playlists_by_artist = search_playlists(search_by_artist, limit=max_per_source)
+        print(f"Found {len(playlists_by_artist)} playlists by artist search")
+    except Exception as e:
+        print(f"Error searching playlists by artist: {e}")
+        playlists_by_artist = []
     
     for playlist in playlists_by_artist:
-        playlist_id = playlist["id"]
-        if playlist_id not in discovered:
+        playlist_id = playlist.get("id")
+        if playlist_id and playlist_id not in discovered:
             discovered[playlist_id] = playlist
     
-    top_tracks = get_artist_top_tracks(artist_id, market="US")
+    # Search by top tracks
+    try:
+        top_tracks = get_artist_top_tracks(artist_id, market="US")
+        print(f"Found {len(top_tracks)} top tracks")
+    except Exception as e:
+        print(f"Error getting top tracks: {e}")
+        top_tracks = []
     
     for track in top_tracks[:5]:
-        track_name = track["name"]
+        track_name = track.get("name", "")
+        if not track_name:
+            continue
         search_query = f'track:"{track_name}" artist:"{artist_name}"'
-        playlists_by_track = search_playlists(search_query, limit=10)
+        try:
+            playlists_by_track = search_playlists(search_query, limit=10)
+            print(f"Found {len(playlists_by_track)} playlists for track '{track_name}'")
+        except Exception as e:
+            print(f"Error searching playlists by track: {e}")
+            playlists_by_track = []
         
         for playlist in playlists_by_track:
-            playlist_id = playlist["id"]
-            if playlist_id not in discovered and len(discovered) < max_playlists:
+            playlist_id = playlist.get("id")
+            if playlist_id and playlist_id not in discovered and len(discovered) < max_playlists:
                 discovered[playlist_id] = playlist
                 if len(discovered) >= max_playlists:
                     break
@@ -66,6 +86,8 @@ def discover_playlists(artist_id: str, db: Session, max_playlists: int = 50) -> 
         if len(discovered) >= max_playlists:
             break
         time.sleep(0.05)  # Reduced delay
+    
+    print(f"Total discovered playlists before verification: {len(discovered)}")
     
     verified_playlists = []
     
@@ -83,29 +105,35 @@ def discover_playlists(artist_id: str, db: Session, max_playlists: int = 50) -> 
             for track in tracks:
                 if track and track.get("artists"):
                     for track_artist in track["artists"]:
-                        if track_artist and track_artist.get("id") == artist_id:
+                        # Compare as strings to handle type mismatches
+                        if track_artist and str(track_artist.get("id", "")) == str(artist_id):
                             artist_found = True
                             tracks_count += 1
             
             if artist_found:
                 verified_playlists.append({
                     "spotify_playlist_id": playlist_id,
-                    "name": full_playlist["name"],
-                    "owner_id": full_playlist["owner"].get("id"),
-                    "owner_name": full_playlist["owner"].get("display_name"),
-                    "follower_count": full_playlist.get("followers", {}).get("total"),
+                    "name": full_playlist.get("name", "Unknown"),
+                    "owner_id": full_playlist.get("owner", {}).get("id"),
+                    "owner_name": full_playlist.get("owner", {}).get("display_name"),
+                    "follower_count": full_playlist.get("followers", {}).get("total", 0),
                     "tracks_count": tracks_count,
                 })
+                print(f"Verified playlist: {full_playlist.get('name')} with {tracks_count} tracks by artist")
                 
                 # Early exit if we have enough verified playlists
                 if len(verified_playlists) >= max_playlists:
                     break
+            else:
+                print(f"Playlist {playlist_id} ({full_playlist.get('name')}) does not contain artist {artist_id}")
             
             # Reduced delay - only 0.05s between playlist checks
             time.sleep(0.05)
-        except Exception:
+        except Exception as e:
+            print(f"Error verifying playlist {playlist_id}: {e}")
             continue
-                
+    
+    print(f"Total verified playlists: {len(verified_playlists)}")
     return verified_playlists
 
 

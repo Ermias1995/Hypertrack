@@ -98,8 +98,11 @@ def _refresh_access_token() -> str:
     return _access_token
 
 
-def _make_request(endpoint: str, params: dict = None) -> dict:
-    """Make an authenticated request to SoundCloud API."""
+def _make_request(endpoint: str, params: dict = None, return_list: bool = False):
+    """
+    Make an authenticated request to SoundCloud API.
+    return_list=True if endpoint returns a list directly (not wrapped in dict).
+    """
     token = _get_access_token()
     url = f"{BASE_URL}{endpoint}"
     
@@ -111,7 +114,12 @@ def _make_request(endpoint: str, params: dict = None) -> dict:
     try:
         response = requests.get(url, headers=headers, params=params, timeout=10)
         response.raise_for_status()
-        return response.json()
+        data = response.json()
+        # SoundCloud sometimes returns lists directly, sometimes wrapped
+        if return_list and isinstance(data, dict):
+            # Check if it's a paginated response with collection
+            return data.get("collection", data.get("data", []))
+        return data
     except requests.exceptions.HTTPError as e:
         # If 401, try refreshing token once
         if e.response.status_code == 401:
@@ -122,7 +130,10 @@ def _make_request(endpoint: str, params: dict = None) -> dict:
             headers["Authorization"] = f"OAuth {token}"
             response = requests.get(url, headers=headers, params=params, timeout=10)
             response.raise_for_status()
-            return response.json()
+            data = response.json()
+            if return_list and isinstance(data, dict):
+                return data.get("collection", data.get("data", []))
+            return data
         raise
 
 
@@ -150,33 +161,55 @@ def get_artist_top_tracks(user_id: str, market: str = "US") -> List[dict]:
     market parameter is ignored (SoundCloud is global).
     Returns normalized format matching Spotify's track response.
     """
-    tracks = _make_request(f"/users/{user_id}/tracks", params={"limit": 200})
+    print(f"[SoundCloud] Getting top tracks for user: {user_id}")
+    try:
+        tracks_data = _make_request(f"/users/{user_id}/tracks", params={"limit": 200}, return_list=True)
+        
+        print(f"[SoundCloud] Raw tracks response type: {type(tracks_data)}")
+        
+        # Handle if it's a list or dict
+        if isinstance(tracks_data, list):
+            tracks = tracks_data
+        elif isinstance(tracks_data, dict):
+            tracks = tracks_data.get("collection", tracks_data.get("data", []))
+        else:
+            tracks = []
+        
+        print(f"[SoundCloud] Found {len(tracks)} tracks")
+        
+        # Sort by playback_count (popularity) descending
+        sorted_tracks = sorted(
+            tracks,
+            key=lambda x: x.get("playback_count", 0),
+            reverse=True
+        )[:10]  # Top 10 tracks
     
-    # Sort by playback_count (popularity) descending
-    sorted_tracks = sorted(
-        tracks,
-        key=lambda x: x.get("playback_count", 0),
-        reverse=True
-    )[:10]  # Top 10 tracks
-    
-    # Normalize to Spotify-like format
-    result = []
-    for track in sorted_tracks:
-        track_user = track.get("user", {})
-        result.append({
-            "id": str(track.get("id")),
-            "name": track.get("title", "Unknown Track"),
-            "artists": [
-                {
-                    "id": str(track_user.get("id", user_id)),
-                    "name": track_user.get("full_name") or track_user.get("username", "Unknown Artist"),
-                }
-            ],
-            "duration": track.get("duration", 0),
-            "playback_count": track.get("playback_count", 0),
-        })
-    
-    return result
+        # Normalize to Spotify-like format
+        result = []
+        for track in sorted_tracks:
+            if not isinstance(track, dict):
+                continue
+            track_user = track.get("user", {})
+            result.append({
+                "id": str(track.get("id")),
+                "name": track.get("title", "Unknown Track"),
+                "artists": [
+                    {
+                        "id": str(track_user.get("id", user_id)),
+                        "name": track_user.get("full_name") or track_user.get("username", "Unknown Artist"),
+                    }
+                ],
+                "duration": track.get("duration", 0),
+                "playback_count": track.get("playback_count", 0),
+            })
+        
+        print(f"[SoundCloud] Returning {len(result)} normalized tracks")
+        return result
+    except Exception as e:
+        print(f"[SoundCloud] Error in get_artist_top_tracks: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
 
 
 def search_playlists(query: str, limit: int = 50) -> List[dict]:
@@ -186,20 +219,82 @@ def search_playlists(query: str, limit: int = 50) -> List[dict]:
     Returns normalized format matching Spotify's playlist response.
     """
     # Clean query - remove any Spotify-style syntax if present
-    # e.g., 'artist:"Name"' -> 'Name'
-    clean_query = query.replace('artist:"', '').replace('"', '').replace('track:"', '').strip()
+    # e.g., 'artist:"Name"' -> 'Name', 'track:"Song" artist:"Name"' -> 'Song Name'
+    clean_query = query.replace('artist:"', '').replace('track:"', '').replace('"', '').strip()
+    # Remove extra spaces
+    clean_query = ' '.join(clean_query.split())
     
-    playlists = _make_request(
-        "/playlists",
-        params={"q": clean_query, "limit": limit}
-    )
+    print(f"[SoundCloud] Searching playlists with query: '{clean_query}'")
     
-    # Normalize to Spotify-like format
-    result = []
-    for playlist in playlists:
+    try:
+        playlists_data = _make_request(
+            "/playlists",
+            params={"q": clean_query, "limit": limit},
+            return_list=True
+        )
+        
+        print(f"[SoundCloud] Raw response type: {type(playlists_data)}")
+        if isinstance(playlists_data, dict):
+            print(f"[SoundCloud] Response keys: {playlists_data.keys()}")
+        
+        # Handle if it's a list or dict
+        if isinstance(playlists_data, list):
+            playlists = playlists_data
+        elif isinstance(playlists_data, dict):
+            # SoundCloud might return paginated response
+            playlists = playlists_data.get("collection", playlists_data.get("data", []))
+            if not playlists:
+                # Try direct access if it's a single playlist object
+                if playlists_data.get("kind") == "playlist":
+                    playlists = [playlists_data]
+        else:
+            playlists = []
+        
+        print(f"[SoundCloud] Found {len(playlists)} playlists after parsing")
+        
+        # Normalize to Spotify-like format
+        result = []
+        for playlist in playlists:
+            if not isinstance(playlist, dict):
+                continue
+            owner = playlist.get("user", {})
+            result.append({
+                "id": str(playlist.get("id")),
+                "name": playlist.get("title", "Unknown Playlist"),
+                "owner": {
+                    "id": str(owner.get("id", "unknown")),
+                    "display_name": owner.get("full_name") or owner.get("username", "Unknown"),
+                },
+                "followers": {
+                    "total": playlist.get("likes_count", 0) or playlist.get("followers_count", 0),
+                },
+                "description": playlist.get("description"),
+            })
+        
+        print(f"[SoundCloud] Returning {len(result)} normalized playlists")
+        return result
+    except Exception as e:
+        print(f"[SoundCloud] Error in search_playlists: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+
+def get_playlist(playlist_id: str) -> dict:
+    """
+    Get playlist details by ID.
+    Returns normalized format matching Spotify's playlist response.
+    """
+    print(f"[SoundCloud] Getting playlist: {playlist_id}")
+    try:
+        # Don't use show_tracks=false - we want tracks for verification
+        playlist = _make_request(f"/playlists/{playlist_id}")
+        
         owner = playlist.get("user", {})
-        result.append({
-            "id": str(playlist.get("id")),
+        
+        # Normalize to Spotify-like format
+        result = {
+            "id": str(playlist.get("id", playlist_id)),
             "name": playlist.get("title", "Unknown Playlist"),
             "owner": {
                 "id": str(owner.get("id", "unknown")),
@@ -209,33 +304,14 @@ def search_playlists(query: str, limit: int = 50) -> List[dict]:
                 "total": playlist.get("likes_count", 0) or playlist.get("followers_count", 0),
             },
             "description": playlist.get("description"),
-        })
-    
-    return result
-
-
-def get_playlist(playlist_id: str) -> dict:
-    """
-    Get playlist details by ID.
-    Returns normalized format matching Spotify's playlist response.
-    """
-    playlist = _make_request(f"/playlists/{playlist_id}", params={"show_tracks": "false"})
-    
-    owner = playlist.get("user", {})
-    
-    # Normalize to Spotify-like format
-    return {
-        "id": str(playlist.get("id", playlist_id)),
-        "name": playlist.get("title", "Unknown Playlist"),
-        "owner": {
-            "id": str(owner.get("id", "unknown")),
-            "display_name": owner.get("full_name") or owner.get("username", "Unknown"),
-        },
-        "followers": {
-            "total": playlist.get("likes_count", 0) or playlist.get("followers_count", 0),
-        },
-        "description": playlist.get("description"),
-    }
+        }
+        print(f"[SoundCloud] Retrieved playlist: {result['name']}")
+        return result
+    except Exception as e:
+        print(f"[SoundCloud] Error in get_playlist: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 
 def get_playlist_tracks(
@@ -248,40 +324,64 @@ def get_playlist_tracks(
     If artist_id is provided, filters tracks by that artist (user).
     Returns normalized format matching Spotify's track response.
     """
-    # Get playlist with tracks
-    playlist = _make_request(f"/playlists/{playlist_id}")
-    tracks_data = playlist.get("tracks", [])
-    
-    # If tracks not in response, try tracks endpoint
-    if not tracks_data:
-        try:
-            tracks_data = _make_request(f"/playlists/{playlist_id}/tracks", params={"limit": limit})
-        except Exception:
+    print(f"[SoundCloud] Getting tracks for playlist: {playlist_id}, filtering by artist: {artist_id}")
+    try:
+        # Get playlist with tracks - need to request with tracks included
+        playlist = _make_request(f"/playlists/{playlist_id}")
+        tracks_data = playlist.get("tracks", [])
+        
+        print(f"[SoundCloud] Playlist response has {len(tracks_data)} tracks in 'tracks' field")
+        
+        # If tracks not in response, try tracks endpoint
+        if not tracks_data:
+            try:
+                tracks_data = _make_request(f"/playlists/{playlist_id}/tracks", params={"limit": limit}, return_list=True)
+                print(f"[SoundCloud] Tracks endpoint returned type: {type(tracks_data)}")
+                # Handle if it's a list or dict
+                if isinstance(tracks_data, dict):
+                    tracks_data = tracks_data.get("collection", tracks_data.get("data", []))
+            except Exception as e:
+                print(f"[SoundCloud] Error getting tracks from endpoint: {e}")
+                tracks_data = []
+        
+        # Ensure tracks_data is a list
+        if not isinstance(tracks_data, list):
+            print(f"[SoundCloud] tracks_data is not a list, converting...")
             tracks_data = []
-    
-    # Normalize and filter
-    result = []
-    for track in tracks_data[:limit]:
-        track_user = track.get("user", {})
-        track_user_id = str(track_user.get("id", ""))
         
-        # Filter by artist if specified
-        if artist_id and track_user_id != str(artist_id):
-            continue
-        
-        result.append({
-            "id": str(track.get("id")),
-            "name": track.get("title", "Unknown Track"),
-            "artists": [
-                {
-                    "id": track_user_id,
-                    "name": track_user.get("full_name") or track_user.get("username", "Unknown Artist"),
-                }
-            ],
-            "duration": track.get("duration", 0),
-        })
+        print(f"[SoundCloud] Processing {len(tracks_data)} tracks")
     
-    return result
+        # Normalize and filter
+        result = []
+        for track in tracks_data[:limit]:
+            if not isinstance(track, dict):
+                continue
+            track_user = track.get("user", {})
+            track_user_id = str(track_user.get("id", ""))
+            
+            # Filter by artist if specified
+            if artist_id and track_user_id != str(artist_id):
+                continue
+            
+            result.append({
+                "id": str(track.get("id")),
+                "name": track.get("title", "Unknown Track"),
+                "artists": [
+                    {
+                        "id": track_user_id,
+                        "name": track_user.get("full_name") or track_user.get("username", "Unknown Artist"),
+                    }
+                ],
+                "duration": track.get("duration", 0),
+            })
+        
+        print(f"[SoundCloud] Returning {len(result)} tracks (filtered by artist_id={artist_id})")
+        return result
+    except Exception as e:
+        print(f"[SoundCloud] Error in get_playlist_tracks: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
 
 
 def resolve_soundcloud_url(url: str) -> Optional[dict]:
