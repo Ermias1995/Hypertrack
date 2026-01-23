@@ -19,6 +19,13 @@ class Settings(BaseSettings):
     SPOTIFY_CLIENT_ID: str = ""
     SPOTIFY_CLIENT_SECRET: str = ""
     
+    # SoundCloud API Configuration
+    SOUNDCLOUD_CLIENT_ID: str = ""
+    SOUNDCLOUD_CLIENT_SECRET: str = ""
+    
+    # Music API Provider: "spotify", "soundcloud", or "mock"
+    MUSIC_API_PROVIDER: str = "soundcloud"
+    
     class Config:
         env_file = ".env"
         case_sensitive = True

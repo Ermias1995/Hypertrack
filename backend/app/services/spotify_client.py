@@ -12,7 +12,24 @@ _token_expires_at: float = 0
 
 
 def _use_mock() -> bool:
-    return not (settings.SPOTIFY_CLIENT_ID and settings.SPOTIFY_CLIENT_SECRET)
+    """Check if we should use mock service."""
+    return settings.MUSIC_API_PROVIDER.lower() == "mock"
+
+
+def _use_soundcloud() -> bool:
+    """Check if we should use SoundCloud API."""
+    provider = settings.MUSIC_API_PROVIDER.lower()
+    return provider == "soundcloud" and bool(
+        settings.SOUNDCLOUD_CLIENT_ID and settings.SOUNDCLOUD_CLIENT_SECRET
+    )
+
+
+def _use_spotify() -> bool:
+    """Check if we should use Spotify API."""
+    provider = settings.MUSIC_API_PROVIDER.lower()
+    return provider == "spotify" and bool(
+        settings.SPOTIFY_CLIENT_ID and settings.SPOTIFY_CLIENT_SECRET
+    )
 
 
 def _get_access_token() -> str:
@@ -98,30 +115,46 @@ def _get_playlist_tracks(
 
 
 def get_artist(spotify_id: str) -> dict:
+    """Get artist information. Works with Spotify IDs, SoundCloud user IDs, or mock."""
     if _use_mock():
         from app.services.spotify_mock import get_artist as mock_get_artist
         return mock_get_artist(spotify_id)
+    elif _use_soundcloud():
+        from app.services.soundcloud_client import get_artist as sc_get_artist
+        return sc_get_artist(spotify_id)
     return _get_artist(spotify_id)
 
 
 def get_artist_top_tracks(spotify_id: str, market: str = "US") -> List[dict]:
+    """Get artist top tracks. Works with Spotify IDs, SoundCloud user IDs, or mock."""
     if _use_mock():
         from app.services.spotify_mock import get_artist_top_tracks as mock_top
         return mock_top(spotify_id, market)
+    elif _use_soundcloud():
+        from app.services.soundcloud_client import get_artist_top_tracks as sc_top
+        return sc_top(spotify_id, market)
     return _get_artist_top_tracks(spotify_id, market)
 
 
 def search_playlists(query: str, limit: int = 50) -> List[dict]:
+    """Search for playlists. Works with Spotify, SoundCloud, or mock."""
     if _use_mock():
         from app.services.spotify_mock import search_playlists as mock_search
         return mock_search(query, limit)
+    elif _use_soundcloud():
+        from app.services.soundcloud_client import search_playlists as sc_search
+        return sc_search(query, limit)
     return _search_playlists(query, limit)
 
 
 def get_playlist(playlist_id: str) -> dict:
+    """Get playlist details. Works with Spotify IDs, SoundCloud IDs, or mock."""
     if _use_mock():
         from app.services.spotify_mock import get_playlist as mock_get_playlist
         return mock_get_playlist(playlist_id)
+    elif _use_soundcloud():
+        from app.services.soundcloud_client import get_playlist as sc_get_playlist
+        return sc_get_playlist(playlist_id)
     return _get_playlist(playlist_id)
 
 
@@ -130,7 +163,11 @@ def get_playlist_tracks(
     limit: int = 100,
     artist_id: str | None = None,
 ) -> List[dict]:
+    """Get tracks from a playlist. Works with Spotify, SoundCloud, or mock."""
     if _use_mock():
         from app.services.spotify_mock import get_playlist_tracks as mock_tracks
         return mock_tracks(playlist_id, limit, artist_id)
+    elif _use_soundcloud():
+        from app.services.soundcloud_client import get_playlist_tracks as sc_tracks
+        return sc_tracks(playlist_id, limit, artist_id)
     return _get_playlist_tracks(playlist_id, limit, artist_id)

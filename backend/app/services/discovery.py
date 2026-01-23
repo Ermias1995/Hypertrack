@@ -65,11 +65,14 @@ def discover_playlists(artist_id: str, db: Session, max_playlists: int = 50) -> 
         
         if len(discovered) >= max_playlists:
             break
-        time.sleep(0.1)
+        time.sleep(0.05)  # Reduced delay
     
     verified_playlists = []
     
-    for playlist_id, playlist_data in list(discovered.items())[:max_playlists]:
+    # Limit verification to reasonable number to avoid too many API calls
+    max_to_verify = min(max_playlists, 30)  # Verify up to 30 playlists max
+    
+    for playlist_id, playlist_data in list(discovered.items())[:max_to_verify]:
         try:
             full_playlist = get_playlist(playlist_id)
             tracks = get_playlist_tracks(playlist_id, limit=100, artist_id=artist_id)
@@ -93,8 +96,13 @@ def discover_playlists(artist_id: str, db: Session, max_playlists: int = 50) -> 
                     "follower_count": full_playlist.get("followers", {}).get("total"),
                     "tracks_count": tracks_count,
                 })
+                
+                # Early exit if we have enough verified playlists
+                if len(verified_playlists) >= max_playlists:
+                    break
             
-            time.sleep(0.1)
+            # Reduced delay - only 0.05s between playlist checks
+            time.sleep(0.05)
         except Exception:
             continue
                 

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from datetime import datetime, timezone
 
 from app.db.session import get_db
 from app.models.artist import Artist
@@ -59,7 +60,11 @@ def _run_discovery_and_respond(artist, db, update_name_from_spotify=True):
     )
     db.add(snapshot)
     db.flush()
+    
+    # Update artist timestamps - explicitly set to ensure they're updated
+    now = datetime.now(timezone.utc)
     artist.last_snapshot_at = snapshot.snapshot_time
+    artist.updated_at = now  # Explicitly set updated_at
 
     for pl in discovered:
         playlist = get_or_create_playlist(
@@ -234,12 +239,42 @@ def refresh_artist(artist_id: int, db: Session = Depends(get_db)):
 
 @router.post("/query", response_model=ArtistQueryResponse)
 def query_artist(payload: ArtistQueryRequest, db: Session = Depends(get_db)):
+    from app.core.config import settings
+    from app.services.soundcloud_client import resolve_soundcloud_url
+    
     url = payload.spotify_url.strip()
-    spotify_id = url.rstrip("/").split("/")[-1].split("?")[0]
+    
+    # Detect provider and extract artist ID
+    provider = settings.MUSIC_API_PROVIDER.lower()
+    artist_id = None
+    
+    # Check if it's a SoundCloud URL
+    if "soundcloud.com" in url.lower() or "on.soundcloud.com" in url.lower():
+        if provider == "soundcloud":
+            # Resolve SoundCloud URL
+            resolved = resolve_soundcloud_url(url)
+            if resolved and resolved.get("kind") == "user":
+                artist_id = resolved["id"]
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="SoundCloud URL must point to a user/artist profile",
+                )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="SoundCloud URL provided but provider is not set to 'soundcloud'",
+            )
+    elif "spotify.com" in url.lower() or "open.spotify.com" in url.lower():
+        # Spotify URL - extract ID from path
+        artist_id = url.rstrip("/").split("/")[-1].split("?")[0]
+    else:
+        # Assume it's a direct ID (for backward compatibility)
+        artist_id = url.rstrip("/").split("/")[-1].split("?")[0]
 
     artist = (
         db.query(Artist)
-        .filter(Artist.spotify_artist_id == spotify_id)
+        .filter(Artist.spotify_artist_id == artist_id)
         .first()
     )
 
@@ -271,14 +306,14 @@ def query_artist(payload: ArtistQueryRequest, db: Session = Depends(get_db)):
         )
 
     try:
-        spotify_artist_data = get_spotify_artist(spotify_id)
+        spotify_artist_data = get_spotify_artist(artist_id)
         artist_name = spotify_artist_data["name"]
     except Exception:
-        artist_name = spotify_id
+        artist_name = artist_id
 
     if not artist:
         artist = Artist(
-            spotify_artist_id=spotify_id,
+            spotify_artist_id=artist_id,
             name=artist_name,
             spotify_url=url,
         )
@@ -288,6 +323,7 @@ def query_artist(payload: ArtistQueryRequest, db: Session = Depends(get_db)):
     if payload.force_refresh:
         artist.name = artist_name
         artist.spotify_url = url
+        artist.updated_at = datetime.now(timezone.utc)  # Explicitly set updated_at on update
 
     return _run_discovery_and_respond(artist, db, update_name_from_spotify=True)
 
