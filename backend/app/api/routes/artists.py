@@ -7,7 +7,7 @@ from app.models.artist import Artist
 from app.models.snapshot import Snapshot
 from app.models.placement import Placement
 from app.models.playlist import Playlist
-from app.schemas.artist import ArtistCreate, ArtistRead, ArtistQueryRequest, ArtistQueryResponse, PlaylistSummary
+from app.schemas.artist import ArtistCreate, ArtistCreateFromUrl, ArtistRead, ArtistQueryRequest, ArtistQueryResponse, PlaylistSummary
 from app.schemas.snapshot import SnapshotRead, SnapshotWithChanges
 from app.services.discovery import discover_playlists, get_or_create_playlist
 from app.services.diffing import calculate_changes
@@ -139,7 +139,22 @@ def _run_discovery_and_respond(artist, db, update_name_from_spotify=True):
     )
 
 
-@router.post("/", response_model=ArtistRead)
+@router.post(
+    "/from-url",
+    response_model=ArtistQueryResponse,
+    summary="Create Artist from URL",
+    description="Provide only the artist profile URL (SoundCloud or Spotify). The backend resolves the artist ID and name, creates the artist, and runs playlist discovery. Use this when working with SoundCloud or when you only have a URL.",
+)
+def create_artist_from_url(body: ArtistCreateFromUrl, db: Session = Depends(get_db)):
+    return query_artist(ArtistQueryRequest(spotify_url=body.url.strip(), force_refresh=False), db)
+
+
+@router.post(
+    "/",
+    response_model=ArtistRead,
+    summary="Create Artist (advanced)",
+    description="Manually provide provider ID, name, and URL. For SoundCloud: use SoundCloud user ID as spotify_artist_id and SoundCloud URL as spotify_url. Prefer POST /api/artists/from-url when you only have a URL.",
+)
 def create_artist(payload: ArtistCreate, db: Session = Depends(get_db)):
     artist = Artist(
         spotify_artist_id=payload.spotify_artist_id,
@@ -201,13 +216,18 @@ def get_artist_history(artist_id: int, db: Session = Depends(get_db)):
     return result
 
 
-@router.get("/{artist_id}/playlists", response_model=list[PlaylistSummary])
+@router.get(
+    "/{artist_id}/playlists",
+    response_model=list[PlaylistSummary],
+    summary="Get Artist Playlists",
+    description="Returns playlists from the latest snapshot for this artist. The `artist_id` is the **internal database ID** (from `GET /api/artists/` or the `artist.id` in `POST /api/artists/query`), not the SoundCloud/Spotify artist ID.",
+)
 def get_artist_playlists(artist_id: int, db: Session = Depends(get_db)):
     artist = db.query(Artist).filter(Artist.id == artist_id).first()
     if not artist:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Artist not found",
+            detail=f"Artist with id {artist_id} not found. Use the internal DB id from GET /api/artists/ or from POST /api/artists/query.",
         )
     latest = (
         db.query(Snapshot)
