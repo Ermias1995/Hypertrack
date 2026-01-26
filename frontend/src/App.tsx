@@ -1,15 +1,21 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import ArtistsPage from './pages/ArtistsPage'
 import ArtistDetailPage from './pages/ArtistDetailPage'
+import Header from './components/Header'
 import './App.css'
 
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<ArtistsPage />} />
-        <Route path="/artist/:id" element={<ArtistDetailPage />} />
-      </Routes>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+        <Header />
+        <main>
+          <Routes>
+            <Route path="/" element={<ArtistsPage />} />
+            <Route path="/artist/:id" element={<ArtistDetailPage />} />
+          </Routes>
+        </main>
+      </div>
     </BrowserRouter>
   )
 }
