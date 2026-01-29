@@ -261,13 +261,13 @@ def refresh_artist(artist_id: int, db: Session = Depends(get_db)):
 
 @router.post("/query", response_model=ArtistQueryResponse)
 def query_artist(payload: ArtistQueryRequest, db: Session = Depends(get_db)):
-    from app.core.config import settings
+    from app.core.provider import get_effective_provider
     from app.services.soundcloud_client import resolve_soundcloud_url
     
     url = payload.spotify_url.strip()
     
     # Detect provider and extract artist ID
-    provider = settings.MUSIC_API_PROVIDER.lower()
+    provider = get_effective_provider()
     artist_id = None
     
     # Check if it's a SoundCloud URL

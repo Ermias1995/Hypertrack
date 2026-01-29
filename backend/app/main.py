@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.db.init_db import init_db
-from app.api.routes import artists, playlists
+from app.api.routes import artists, playlists, config
 from app.core.security import ApiKeyDependency
 
 app = FastAPI(
@@ -33,6 +33,12 @@ app.include_router(
 
 app.include_router(
     playlists.router,
+    prefix="/api",
+    dependencies=[ApiKeyDependency],
+)
+
+app.include_router(
+    config.router,
     prefix="/api",
     dependencies=[ApiKeyDependency],
 )

@@ -3,6 +3,7 @@ import requests
 import time
 from typing import List, Optional
 from app.core.config import settings
+from app.core.provider import get_effective_provider
 
 TOKEN_URL = "https://accounts.spotify.com/api/token"
 BASE_URL = "https://api.spotify.com/v1"
@@ -13,12 +14,12 @@ _token_expires_at: float = 0
 
 def _use_mock() -> bool:
     """Check if we should use mock service."""
-    return settings.MUSIC_API_PROVIDER.lower() == "mock"
+    return get_effective_provider() == "mock"
 
 
 def _use_soundcloud() -> bool:
     """Check if we should use SoundCloud API."""
-    provider = settings.MUSIC_API_PROVIDER.lower()
+    provider = get_effective_provider()
     return provider == "soundcloud" and bool(
         settings.SOUNDCLOUD_CLIENT_ID and settings.SOUNDCLOUD_CLIENT_SECRET
     )
@@ -26,7 +27,7 @@ def _use_soundcloud() -> bool:
 
 def _use_spotify() -> bool:
     """Check if we should use Spotify API."""
-    provider = settings.MUSIC_API_PROVIDER.lower()
+    provider = get_effective_provider()
     return provider == "spotify" and bool(
         settings.SPOTIFY_CLIENT_ID and settings.SPOTIFY_CLIENT_SECRET
     )

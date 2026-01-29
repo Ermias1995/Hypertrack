@@ -87,3 +87,22 @@ export function getArtistHistory(id: number): Promise<SnapshotWithChanges[]> {
 export function refreshArtist(id: number): Promise<ArtistQueryResponse> {
   return api<ArtistQueryResponse>(`/artists/${id}/refresh`, { method: 'POST' })
 }
+
+// --- Config (music provider) ---
+
+export type MusicProvider = 'spotify' | 'soundcloud'
+
+export interface Config {
+  provider: MusicProvider
+}
+
+export function getConfig(): Promise<Config> {
+  return api<Config>('/config')
+}
+
+export function setConfig(provider: MusicProvider): Promise<Config> {
+  return api<Config>('/config', {
+    method: 'PATCH',
+    body: JSON.stringify({ provider }),
+  })
+}
