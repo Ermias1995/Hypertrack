@@ -11,9 +11,10 @@ import {
 } from '../api'
 import PlaylistCard from '../components/PlaylistCard'
 import SnapshotRow from '../components/SnapshotRow'
-import { FaArrowLeft, FaExternalLinkAlt, FaSync, FaUser, FaMusic, FaHistory, FaSpinner } from 'react-icons/fa'
+import PerformanceChart from '../components/PerformanceChart'
+import { FaArrowLeft, FaExternalLinkAlt, FaSync, FaUser, FaMusic, FaHistory, FaSpinner, FaChartLine } from 'react-icons/fa'
 
-type Tab = 'playlists' | 'history'
+type Tab = 'playlists' | 'history' | 'performance'
 
 export default function ArtistDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -203,6 +204,17 @@ export default function ArtistDetailPage() {
         >
           History
         </button>
+        <button
+          onClick={() => setActiveTab('performance')}
+          className={`px-4 py-2 font-medium rounded-t-lg transition-colors ${
+            activeTab === 'performance'
+              ? 'bg-white dark:bg-slate-800 text-primary-600 dark:text-primary-400 border border-slate-200 dark:border-slate-700 border-b-transparent -mb-px'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <FaChartLine className="inline mr-1.5" />
+          Performance
+        </button>
       </div>
 
       {/* Tab content */}
@@ -238,6 +250,10 @@ export default function ArtistDetailPage() {
             history.map((snap) => <SnapshotRow key={snap.id} snapshot={snap} />)
           )}
         </div>
+      )}
+
+      {activeTab === 'performance' && (
+        <PerformanceChart history={history} />
       )}
     </div>
   )
