@@ -122,7 +122,29 @@ def get_artist(spotify_id: str) -> dict:
     elif _use_soundcloud():
         from app.services.soundcloud_client import get_artist as sc_get_artist
         return sc_get_artist(spotify_id)
-    return _get_artist(spotify_id)
+    
+    # Spotify API returns raw response
+    data = _get_artist(spotify_id)
+    
+    # Extract image URL - Spotify returns images array, use medium or large
+    image_url = None
+    if data.get("images"):
+        # Prefer medium (index 1) or large (index 0), fallback to first available
+        for img in data["images"]:
+            if img.get("height", 0) >= 300:  # Medium or large
+                image_url = img.get("url")
+                break
+        if not image_url and len(data["images"]) > 0:
+            image_url = data["images"][0].get("url")
+    
+    # Normalize to include image_url
+    return {
+        "id": data.get("id"),
+        "name": data.get("name"),
+        "image_url": image_url,
+        "followers": data.get("followers", {}),
+        "genres": data.get("genres", []),
+    }
 
 
 def get_artist_top_tracks(spotify_id: str, market: str = "US") -> List[dict]:

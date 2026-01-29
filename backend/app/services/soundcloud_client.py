@@ -146,12 +146,16 @@ def get_artist(user_id: str) -> dict:
     """
     user = _make_request(f"/users/{user_id}")
     
+    # Extract image URL - SoundCloud uses avatar_url or large_avatar_url
+    image_url = user.get("large_avatar_url") or user.get("avatar_url") or None
+    
     # Normalize to Spotify-like format
     return {
         "id": str(user.get("id", user_id)),
         "name": user.get("full_name") or user.get("username", "Unknown Artist"),
         "username": user.get("username"),
         "followers_count": user.get("followers_count", 0),
+        "image_url": image_url,
     }
 
 

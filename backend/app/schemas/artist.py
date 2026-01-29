@@ -12,6 +12,7 @@ class ArtistBase(BaseModel):
     spotify_artist_id: str = Field(..., description="Provider's artist ID (SoundCloud user ID when using SoundCloud, Spotify artist ID when using Spotify)")
     name: str
     spotify_url: str = Field(..., description="Provider profile URL (SoundCloud or Spotify artist URL)")
+    image_url: str | None = Field(None, description="Artist profile image URL")
 
 
 class ArtistCreate(ArtistBase):

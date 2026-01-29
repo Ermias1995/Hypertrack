@@ -18,6 +18,7 @@ class Artist(Base):
     spotify_artist_id = Column(String, unique=True, index=True, nullable=False)
     name = Column(String, nullable=False)
     spotify_url = Column(String, nullable=False)
+    image_url = Column(String, nullable=True)
     refresh_tier = Column(Enum(RefreshTier), default=RefreshTier.DEFAULT)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

@@ -41,6 +41,8 @@ def _run_discovery_and_respond(artist, db, update_name_from_spotify=True):
         try:
             data = get_spotify_artist(spotify_id)
             artist.name = data["name"]
+            if data.get("image_url"):
+                artist.image_url = data["image_url"]
         except Exception:
             pass
 
@@ -328,14 +330,17 @@ def query_artist(payload: ArtistQueryRequest, db: Session = Depends(get_db)):
     try:
         spotify_artist_data = get_spotify_artist(artist_id)
         artist_name = spotify_artist_data["name"]
+        artist_image_url = spotify_artist_data.get("image_url")
     except Exception:
         artist_name = artist_id
+        artist_image_url = None
 
     if not artist:
         artist = Artist(
             spotify_artist_id=artist_id,
             name=artist_name,
             spotify_url=url,
+            image_url=artist_image_url,
         )
         db.add(artist)
         db.flush()
@@ -343,6 +348,8 @@ def query_artist(payload: ArtistQueryRequest, db: Session = Depends(get_db)):
     if payload.force_refresh:
         artist.name = artist_name
         artist.spotify_url = url
+        if artist_image_url:
+            artist.image_url = artist_image_url
         artist.updated_at = datetime.now(timezone.utc)  # Explicitly set updated_at on update
 
     return _run_discovery_and_respond(artist, db, update_name_from_spotify=True)

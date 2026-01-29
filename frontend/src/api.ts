@@ -13,6 +13,7 @@ export interface Artist {
   spotify_artist_id: string
   name: string
   spotify_url: string
+  image_url: string | null
 }
 
 export interface PlaylistSummary {
