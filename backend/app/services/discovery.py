@@ -99,33 +99,29 @@ def discover_playlists(artist_id: str, db: Session, max_playlists: int = 50) -> 
             full_playlist = get_playlist(playlist_id)
             tracks = get_playlist_tracks(playlist_id, limit=100, artist_id=artist_id)
             
-            artist_found = False
+            # Count tracks that are uploaded/by this artist (for display only).
+            # We include every discovered playlist: intent is "playlists that include the artist",
+            # not "playlists where the artist uploaded the tracks".
             tracks_count = 0
-            
             for track in tracks:
                 if track and track.get("artists"):
                     for track_artist in track["artists"]:
-                        # Compare as strings to handle type mismatches
                         if track_artist and str(track_artist.get("id", "")) == str(artist_id):
-                            artist_found = True
                             tracks_count += 1
+                            break
+
+            verified_playlists.append({
+                "spotify_playlist_id": playlist_id,
+                "name": full_playlist.get("name", "Unknown"),
+                "owner_id": full_playlist.get("owner", {}).get("id"),
+                "owner_name": full_playlist.get("owner", {}).get("display_name"),
+                "follower_count": full_playlist.get("followers", {}).get("total", 0),
+                "tracks_count": tracks_count,
+            })
+            print(f"Included playlist: {full_playlist.get('name')} ({tracks_count} tracks by artist)")
             
-            if artist_found:
-                verified_playlists.append({
-                    "spotify_playlist_id": playlist_id,
-                    "name": full_playlist.get("name", "Unknown"),
-                    "owner_id": full_playlist.get("owner", {}).get("id"),
-                    "owner_name": full_playlist.get("owner", {}).get("display_name"),
-                    "follower_count": full_playlist.get("followers", {}).get("total", 0),
-                    "tracks_count": tracks_count,
-                })
-                print(f"Verified playlist: {full_playlist.get('name')} with {tracks_count} tracks by artist")
-                
-                # Early exit if we have enough verified playlists
-                if len(verified_playlists) >= max_playlists:
-                    break
-            else:
-                print(f"Playlist {playlist_id} ({full_playlist.get('name')}) does not contain artist {artist_id}")
+            if len(verified_playlists) >= max_playlists:
+                break
             
             # Reduced delay - only 0.05s between playlist checks
             time.sleep(0.05)
