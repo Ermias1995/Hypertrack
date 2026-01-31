@@ -7,9 +7,9 @@ import './App.css'
 function App() {
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+      <div className="min-h-screen app-bg">
         <Header />
-        <main>
+        <main className="relative">
           <Routes>
             <Route path="/" element={<ArtistsPage />} />
             <Route path="/artist/:id" element={<ArtistDetailPage />} />

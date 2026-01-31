@@ -3,7 +3,49 @@
 @tailwind utilities;
 
 @layer base {
-  body {
-    @apply bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 min-h-screen;
+  html {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    min-height: 100%;
   }
+  body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    min-height: 100vh;
+    @apply text-slate-900 dark:text-slate-100 antialiased;
+  }
+  #root {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    min-height: 100vh;
+  }
+}
+
+/* Music-app background: gradient + subtle glow, full viewport */
+.app-bg {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100vh;
+  @apply bg-slate-50;
+  background-image:
+    radial-gradient(ellipse 120% 80% at 50% -20%, rgba(139, 92, 246, 0.12), transparent),
+    radial-gradient(ellipse 80% 60% at 100% 50%, rgba(16, 185, 129, 0.08), transparent);
+}
+
+/* Dark mode: same background on html/body so no white edges */
+.dark,
+.dark body {
+  background-color: #0f0f13;
+}
+
+.dark .app-bg {
+  background-color: #0f0f13;
+  background-image:
+    radial-gradient(ellipse 120% 80% at 50% -20%, rgba(139, 92, 246, 0.18), transparent),
+    radial-gradient(ellipse 80% 60% at 100% 40%, rgba(16, 185, 129, 0.1), transparent),
+    radial-gradient(ellipse 80% 60% at 0% 70%, rgba(59, 130, 246, 0.08), transparent);
 }

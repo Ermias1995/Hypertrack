@@ -35,30 +35,16 @@ export default function Logo({ className = '' }: LogoProps) {
     }
   }, [])
 
-  // Try to use image logos first, fallback to SVG (match public/ filenames: Logo_dark.png, Logo_light.png)
-  const logoSrc = isDark 
-    ? '/Logo_dark.png' 
-    : '/Logo_light.png'
+  // In dark mode use SVG only so no black box from Logo_dark.png; in light mode use image with SVG fallback
+  const logoSrc = '/Logo_light.png'
 
   return (
     <Link to="/" className={`flex items-center gap-3 ${className}`}>
-      <div className="relative">
-        {/* Try image first */}
-        <img
-          src={logoSrc}
-          alt="Playlist Tracker Logo"
-          className="h-14 w-auto"
-          onError={(e) => {
-            // Fallback to SVG if image not found
-            const target = e.target as HTMLImageElement
-            target.style.display = 'none'
-            const svgFallback = target.nextElementSibling as HTMLElement
-            if (svgFallback) svgFallback.style.display = 'block'
-          }}
-        />
-        {/* SVG Fallback */}
-        <svg
-          className="h-14 w-14 hidden"
+      <div className="relative h-14 flex items-center">
+        {/* Dark mode: SVG only (blends with header). Light: image with SVG fallback */}
+        {isDark ? (
+          <svg
+            className="h-14 w-14 flex-shrink-0"
           viewBox="0 0 100 100"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
@@ -98,6 +84,40 @@ export default function Logo({ className = '' }: LogoProps) {
           <rect x="48" y="50" width="4" height="13" fill="#10b981" />
           <rect x="54" y="45" width="4" height="18" fill="#10b981" />
         </svg>
+        ) : (
+          <>
+            <img
+              src={logoSrc}
+              alt="Playlist Tracker Logo"
+              className="h-14 w-auto"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement
+                target.style.display = 'none'
+                const svgFallback = target.nextElementSibling as HTMLElement
+                if (svgFallback) svgFallback.style.display = 'block'
+              }}
+            />
+            <svg
+              className="h-14 w-14 hidden"
+              viewBox="0 0 100 100"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <defs>
+                <linearGradient id="logoGradientLight" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#8b5cf6" />
+                  <stop offset="100%" stopColor="#10b981" />
+                </linearGradient>
+              </defs>
+              <path d="M20 20 L20 80 L70 50 Z" fill="url(#logoGradientLight)" />
+              <circle cx="50" cy="50" r="18" stroke="#6d28d9" strokeWidth="3" fill="none" />
+              <line x1="65" y1="65" x2="75" y2="75" stroke="#6d28d9" strokeWidth="3" strokeLinecap="round" />
+              <rect x="42" y="55" width="4" height="8" fill="#10b981" />
+              <rect x="48" y="50" width="4" height="13" fill="#10b981" />
+              <rect x="54" y="45" width="4" height="18" fill="#10b981" />
+            </svg>
+          </>
+        )}
       </div>
       {/* Text */}
       <div className="flex items-center gap-1">

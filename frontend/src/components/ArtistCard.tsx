@@ -10,7 +10,7 @@ interface ArtistCardProps {
 
 export default function ArtistCard({ artist, onRefresh, isRefreshing }: ArtistCardProps) {
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 p-6 border border-slate-200 dark:border-slate-700">
+    <div className="bg-white/90 dark:bg-transparent rounded-2xl shadow-lg dark:shadow-none hover:shadow-xl dark:hover:shadow-none p-6 border border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-300">
       <div className="flex items-start gap-4 mb-4">
         {/* Artist Image */}
         <div className="flex-shrink-0">

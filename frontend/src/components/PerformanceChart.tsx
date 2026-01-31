@@ -52,7 +52,7 @@ export default function PerformanceChart({ history }: PerformanceChartProps) {
   const maxY = Math.max(...data.map((d) => d.playlists)) + 1
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
+    <div className="bg-white/90 dark:bg-transparent rounded-2xl shadow-lg dark:shadow-none border border-slate-200/80 dark:border-slate-800 p-4">
       <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
         Historical Performance
       </h3>

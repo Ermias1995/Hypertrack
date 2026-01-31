@@ -107,17 +107,16 @@ export default function ArtistDetailPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Back link */}
-      <Link
-        to="/"
-        className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 mb-6"
-      >
-        <FaArrowLeft /> Back to artists
-      </Link>
-
-      {/* Artist header */}
-      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 border border-slate-200 dark:border-slate-700 mb-6">
+      {/* Artist header: Back link on left, then profile */}
+      <div className="bg-white/90 dark:bg-transparent rounded-2xl shadow-lg dark:shadow-none p-6 border border-slate-200/80 dark:border-slate-800 mb-6">
         <div className="flex items-center gap-4">
+          <Link
+            to="/"
+            className="flex-shrink-0 inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 p-2 -m-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors"
+          >
+            <FaArrowLeft className="w-5 h-5" />
+            <span className="hidden sm:inline">Back to artists</span>
+          </Link>
           <div className="flex-shrink-0">
             {artist.image_url ? (
               <img
@@ -146,7 +145,7 @@ export default function ArtistDetailPage() {
               href={artist.spotify_url}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 text-sm text-primary-600 dark:text-primary-400 hover:underline mt-1"
+              className="inline-flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400 hover:underline mt-1"
             >
               <FaExternalLinkAlt /> View profile
             </a>
@@ -154,7 +153,7 @@ export default function ArtistDetailPage() {
           <button
             onClick={handleRefresh}
             disabled={refreshing}
-            className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-xl shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {refreshing ? <FaSpinner className="animate-spin" /> : <FaSync />}
             {refreshing ? 'Refreshing...' : 'Refresh'}
@@ -188,7 +187,7 @@ export default function ArtistDetailPage() {
           onClick={() => setActiveTab('playlists')}
           className={`px-4 py-2 font-medium rounded-t-lg transition-colors ${
             activeTab === 'playlists'
-              ? 'bg-white dark:bg-slate-800 text-primary-600 dark:text-primary-400 border border-slate-200 dark:border-slate-700 border-b-transparent -mb-px'
+              ? 'bg-white/90 dark:bg-transparent text-emerald-600 dark:text-emerald-400 border border-slate-200 dark:border-slate-800 border-b-transparent -mb-px'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
@@ -198,7 +197,7 @@ export default function ArtistDetailPage() {
           onClick={() => setActiveTab('history')}
           className={`px-4 py-2 font-medium rounded-t-lg transition-colors ${
             activeTab === 'history'
-              ? 'bg-white dark:bg-slate-800 text-primary-600 dark:text-primary-400 border border-slate-200 dark:border-slate-700 border-b-transparent -mb-px'
+              ? 'bg-white/90 dark:bg-transparent text-emerald-600 dark:text-emerald-400 border border-slate-200 dark:border-slate-800 border-b-transparent -mb-px'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
@@ -208,7 +207,7 @@ export default function ArtistDetailPage() {
           onClick={() => setActiveTab('performance')}
           className={`px-4 py-2 font-medium rounded-t-lg transition-colors ${
             activeTab === 'performance'
-              ? 'bg-white dark:bg-slate-800 text-primary-600 dark:text-primary-400 border border-slate-200 dark:border-slate-700 border-b-transparent -mb-px'
+              ? 'bg-white/90 dark:bg-transparent text-emerald-600 dark:text-emerald-400 border border-slate-200 dark:border-slate-800 border-b-transparent -mb-px'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
@@ -221,7 +220,7 @@ export default function ArtistDetailPage() {
       {activeTab === 'playlists' && (
         <div>
           {playlists.length === 0 ? (
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-12 border border-slate-200 dark:border-slate-700 text-center">
+            <div className="bg-white/90 dark:bg-transparent rounded-2xl shadow-lg dark:shadow-none p-12 border border-slate-200/80 dark:border-slate-800 text-center">
               <FaMusic className="w-12 h-12 mx-auto mb-4 text-slate-400 dark:text-slate-500" />
               <p className="text-slate-600 dark:text-slate-400">
                 No playlists in the latest snapshot. Click Refresh to run discovery.
@@ -240,7 +239,7 @@ export default function ArtistDetailPage() {
       {activeTab === 'history' && (
         <div className="space-y-3">
           {history.length === 0 ? (
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-12 border border-slate-200 dark:border-slate-700 text-center">
+            <div className="bg-white/90 dark:bg-transparent rounded-2xl shadow-lg dark:shadow-none p-12 border border-slate-200/80 dark:border-slate-800 text-center">
               <FaHistory className="w-12 h-12 mx-auto mb-4 text-slate-400 dark:text-slate-500" />
               <p className="text-slate-600 dark:text-slate-400">
                 No snapshot history yet. Click Refresh to create the first snapshot.

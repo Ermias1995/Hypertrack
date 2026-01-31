@@ -18,7 +18,7 @@ function formatSnapshotTime(iso: string): string {
 
 export default function SnapshotRow({ snapshot }: SnapshotRowProps) {
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-4 border border-slate-200 dark:border-slate-700 flex flex-wrap items-center gap-4">
+    <div className="bg-white/90 dark:bg-transparent rounded-2xl shadow-lg dark:shadow-none p-4 border border-slate-200/80 dark:border-slate-800 flex flex-wrap items-center gap-4">
       <div className="text-sm text-slate-600 dark:text-slate-400">
         {formatSnapshotTime(snapshot.snapshot_time)}
       </div>

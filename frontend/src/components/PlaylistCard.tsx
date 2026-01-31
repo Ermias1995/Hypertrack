@@ -13,7 +13,7 @@ function getPlaylistTypeBadgeClass(type: string): string {
 
 export default function PlaylistCard({ playlist }: PlaylistCardProps) {
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm hover:shadow-md transition-shadow p-4 border border-slate-200 dark:border-slate-700">
+    <div className="bg-white/90 dark:bg-transparent rounded-2xl shadow-lg dark:shadow-none hover:shadow-xl dark:hover:shadow-none transition-all p-4 border border-slate-200/80 dark:border-slate-800">
       <div className="flex items-start justify-between gap-2 mb-2">
         <h3 className="font-semibold text-slate-900 dark:text-white flex-1 min-w-0 truncate">
           {playlist.name}

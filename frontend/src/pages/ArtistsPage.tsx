@@ -61,7 +61,7 @@ export default function ArtistsPage() {
       </div>
 
       {/* Add Artist Form Card */}
-      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 mb-8 border border-slate-200 dark:border-slate-700">
+      <div className="bg-white/90 dark:bg-transparent rounded-2xl shadow-lg dark:shadow-none p-6 mb-8 border border-slate-200/80 dark:border-slate-800">
         <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">
           Add New Artist
         </h2>
@@ -72,12 +72,12 @@ export default function ArtistsPage() {
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             disabled={adding}
-            className="flex-1 px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700/80 text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-shadow"
           />
           <button
             type="submit"
             disabled={adding || !url.trim()}
-            className="px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-xl shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {adding ? (
               <>
@@ -108,7 +108,7 @@ export default function ArtistsPage() {
           </div>
         </div>
       ) : artists.length === 0 ? (
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md p-12 border border-slate-200 dark:border-slate-700 text-center">
+        <div className="bg-white/90 dark:bg-transparent rounded-2xl shadow-lg dark:shadow-none p-12 border border-slate-200/80 dark:border-slate-800 text-center">
           <FaUsers className="w-16 h-16 mx-auto mb-4 text-slate-400 dark:text-slate-500" />
           <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
             No artists yet
