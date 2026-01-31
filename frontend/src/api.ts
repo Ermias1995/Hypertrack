@@ -21,6 +21,7 @@ export interface PlaylistSummary {
   name: string
   playlist_type: string
   tracks_count: number
+  total_tracks?: number | null
 }
 
 export interface SnapshotWithChanges {

@@ -11,7 +11,8 @@ class Placement(Base):
     artist_id = Column(Integer, ForeignKey("artists.id"), nullable=False, index=True)
     playlist_id = Column(Integer, ForeignKey("playlists.id"), nullable=False, index=True)
     snapshot_id = Column(Integer, ForeignKey("snapshots.id"), nullable=False, index=True)
-    tracks_count = Column(Integer, default=1)
+    tracks_count = Column(Integer, default=1)  # tracks by this artist
+    total_tracks = Column(Integer, nullable=True)  # total tracks in playlist (from API)
     first_seen_at = Column(DateTime(timezone=True), server_default=func.now())
     last_seen_at = Column(DateTime(timezone=True), onupdate=func.now())
     created_at = Column(DateTime(timezone=True), server_default=func.now())

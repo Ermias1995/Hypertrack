@@ -31,6 +31,7 @@ def _placements_to_summaries(placements, db):
                 name=playlist.name,
                 playlist_type=_playlist_type_str(playlist),
                 tracks_count=p.tracks_count,
+                total_tracks=getattr(p, "total_tracks", None),
             ))
     return out
 
@@ -82,6 +83,7 @@ def _run_discovery_and_respond(artist, db, update_name_from_spotify=True):
             playlist_id=playlist.id,
             snapshot_id=snapshot.id,
             tracks_count=pl.get("tracks_count", 1),
+            total_tracks=pl.get("total_tracks"),
         )
         db.add(placement)
 
@@ -108,6 +110,7 @@ def _run_discovery_and_respond(artist, db, update_name_from_spotify=True):
                 name=pl.name,
                 playlist_type=_playlist_type_str(pl),
                 tracks_count=pc.tracks_count,
+                total_tracks=getattr(pc, "total_tracks", None),
             ))
 
     lost = []

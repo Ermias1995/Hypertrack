@@ -35,7 +35,8 @@ class PlaylistSummary(BaseModel):
     id: int
     name: str
     playlist_type: str
-    tracks_count: int
+    tracks_count: int  # tracks by this artist
+    total_tracks: int | None = None  # total tracks in playlist (from API)
 
     class Config:
         from_attributes = True

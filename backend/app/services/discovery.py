@@ -92,23 +92,42 @@ def discover_playlists(artist_id: str, db: Session, max_playlists: int = 50) -> 
     verified_playlists = []
     
     # Limit verification to reasonable number to avoid too many API calls
-    max_to_verify = min(max_playlists, 30)  # Verify up to 30 playlists max
+    max_to_verify = min(max_playlists, 50)  # Verify up to 50 playlists max
+    
+    def _artist_id_from_track_artist(track_artist: dict) -> str | None:
+        """Extract artist id from track artist (id or uri like spotify:artist:xxx)."""
+        if not track_artist:
+            return None
+        aid = track_artist.get("id")
+        if aid:
+            return str(aid)
+        uri = track_artist.get("uri", "")
+        if isinstance(uri, str) and "artist:" in uri:
+            return uri.split("artist:")[-1].strip()
+        return None
     
     for playlist_id, playlist_data in list(discovered.items())[:max_to_verify]:
         try:
             full_playlist = get_playlist(playlist_id)
             tracks = get_playlist_tracks(playlist_id, limit=100, artist_id=artist_id)
+            # Total tracks in playlist (from API when available)
+            total_tracks = full_playlist.get("tracks", {}).get("total")
+            if total_tracks is not None:
+                total_tracks = int(total_tracks)
+            else:
+                total_tracks = len(tracks) if tracks else 0
             
-            # Count tracks that are uploaded/by this artist (for display only).
-            # We include every discovered playlist: intent is "playlists that include the artist",
-            # not "playlists where the artist uploaded the tracks".
+            # Count tracks that are by this artist (id or uri match).
+            artist_id_str = str(artist_id)
             tracks_count = 0
             for track in tracks:
-                if track and track.get("artists"):
-                    for track_artist in track["artists"]:
-                        if track_artist and str(track_artist.get("id", "")) == str(artist_id):
-                            tracks_count += 1
-                            break
+                if not track or not track.get("artists"):
+                    continue
+                for track_artist in track["artists"]:
+                    tid = _artist_id_from_track_artist(track_artist)
+                    if tid and tid == artist_id_str:
+                        tracks_count += 1
+                        break
 
             verified_playlists.append({
                 "spotify_playlist_id": playlist_id,
@@ -117,8 +136,9 @@ def discover_playlists(artist_id: str, db: Session, max_playlists: int = 50) -> 
                 "owner_name": full_playlist.get("owner", {}).get("display_name"),
                 "follower_count": full_playlist.get("followers", {}).get("total", 0),
                 "tracks_count": tracks_count,
+                "total_tracks": total_tracks,
             })
-            print(f"Included playlist: {full_playlist.get('name')} ({tracks_count} tracks by artist)")
+            print(f"Included playlist: {full_playlist.get('name')} (total={total_tracks}, by artist={tracks_count})")
             
             if len(verified_playlists) >= max_playlists:
                 break

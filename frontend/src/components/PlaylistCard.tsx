@@ -25,7 +25,9 @@ export default function PlaylistCard({ playlist }: PlaylistCardProps) {
         </span>
       </div>
       <p className="text-sm text-slate-600 dark:text-slate-400">
-        {playlist.tracks_count} track{playlist.tracks_count !== 1 ? 's' : ''}
+        {playlist.total_tracks != null
+          ? `${playlist.total_tracks} track${playlist.total_tracks !== 1 ? 's' : ''}${playlist.tracks_count > 0 ? ` (${playlist.tracks_count} by artist)` : ''}`
+          : `${playlist.tracks_count} track${playlist.tracks_count !== 1 ? 's' : ''} by artist`}
       </p>
     </div>
   )
