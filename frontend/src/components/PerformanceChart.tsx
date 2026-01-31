@@ -122,7 +122,6 @@ export default function PerformanceChart({ history }: PerformanceChartProps) {
               formatter={() => 'Playlists'}
               iconType="circle"
               iconSize={8}
-              iconStyle={{ fill: 'rgb(34 197 94)' }}
             />
             <Area
               type="monotone"
