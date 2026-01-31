@@ -35,10 +35,10 @@ export default function Logo({ className = '' }: LogoProps) {
     }
   }, [])
 
-  // Try to use image logos first, fallback to SVG
+  // Try to use image logos first, fallback to SVG (match public/ filenames: Logo_dark.png, Logo_light.png)
   const logoSrc = isDark 
-    ? '/logo-dark.png' 
-    : '/logo-light.png'
+    ? '/Logo_dark.png' 
+    : '/Logo_light.png'
 
   return (
     <Link to="/" className={`flex items-center gap-3 ${className}`}>
