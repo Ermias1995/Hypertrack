@@ -35,7 +35,12 @@ class Settings(BaseSettings):
     def CORS_ORIGINS(self) -> List[str]:
         cors_str = os.getenv("CORS_ORIGINS", "").strip()
         if cors_str:
-            origins = [origin.strip() for origin in cors_str.split(",") if origin.strip()]
+            # Normalize: strip trailing slashes so "https://x.com/" matches browser "https://x.com"
+            origins = [
+                origin.strip().rstrip("/")
+                for origin in cors_str.split(",")
+                if origin.strip()
+            ]
             return origins if origins else _DEFAULT_CORS_ORIGINS
         return _DEFAULT_CORS_ORIGINS
 
