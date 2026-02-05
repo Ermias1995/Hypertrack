@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     HOST: str = "127.0.0.1"
     PORT: int = 8000
     DATABASE_URL: str = "sqlite:///./artist_tracker.db"
-    
+
     SPOTIFY_CLIENT_ID: str = ""
     SPOTIFY_CLIENT_SECRET: str = ""
     
@@ -25,7 +25,12 @@ class Settings(BaseSettings):
     
     # Music API Provider: "spotify", "soundcloud", or "mock"
     MUSIC_API_PROVIDER: str = "soundcloud"
-    
+
+    # Auth / JWT
+    AUTH_SECRET_KEY: str = "change-me-to-a-long-random-string"
+    AUTH_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+
     class Config:
         env_file = ".env"
         case_sensitive = True
