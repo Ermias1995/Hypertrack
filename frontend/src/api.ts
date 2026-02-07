@@ -52,6 +52,10 @@ async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
     'x-api-key': getApiKey(),
     ...(options.headers as object),
   }
+  const token = getStoredToken()
+  if (token) {
+    ;(headers as Record<string, string>)['Authorization'] = `Bearer ${token}`
+  }
   const res = await fetch(url, { ...options, headers })
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))).detail || res.statusText
@@ -131,7 +135,10 @@ export interface User {
 export interface AuthToken {
   access_token: string
   token_type: string
+  user?: User
 }
+
+const AUTH_TIMEOUT_MS = 30000
 
 async function authFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const base = getBaseUrl()
@@ -141,30 +148,50 @@ async function authFetch<T>(path: string, options: RequestInit = {}): Promise<T>
     'Accept': 'application/json',
     ...(options.headers as object),
   }
-  const res = await fetch(url, { ...options, headers })
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    const detail = body.detail ?? res.statusText
-    const msg = typeof detail === 'string' ? detail : JSON.stringify(detail)
-    if (res.status === 404) {
-      throw new Error(
-        `Auth endpoint not found (404). Backend may need redeploy. Base URL: ${base}`
-      )
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), AUTH_TIMEOUT_MS)
+  try {
+    const res = await fetch(url, { ...options, headers, signal: controller.signal })
+    clearTimeout(timeoutId)
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      const detail = body.detail ?? res.statusText
+      const msg = typeof detail === 'string' ? detail : JSON.stringify(detail)
+      if (res.status === 404) {
+        throw new Error(
+          `Auth endpoint not found (404). Backend may need redeploy. Base URL: ${base}`
+        )
+      }
+      throw new Error(msg)
     }
-    throw new Error(msg)
+    return res.json() as Promise<T>
+  } catch (err) {
+    clearTimeout(timeoutId)
+    if (err instanceof Error) {
+      if (err.name === 'AbortError') {
+        const base = getBaseUrl()
+        const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)/.test(base)
+        throw new Error(
+          isLocal
+            ? 'Request timed out. Make sure the backend is running (e.g. uvicorn app.main:app --reload from the backend folder).'
+            : 'Request timed out. The server may be slow or unreachable.'
+        )
+      }
+      throw err
+    }
+    throw err
   }
-  return res.json() as Promise<T>
 }
 
-export function signup(email: string, password: string): Promise<User> {
-  return authFetch<User>('/auth/signup', {
+export function signup(email: string, password: string): Promise<AuthToken & { user?: User }> {
+  return authFetch<AuthToken & { user?: User }>('/auth/signup', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
   })
 }
 
-export function login(email: string, password: string): Promise<AuthToken> {
-  return authFetch<AuthToken>('/auth/login', {
+export function login(email: string, password: string): Promise<AuthToken & { user?: User }> {
+  return authFetch<AuthToken & { user?: User }>('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
   })
@@ -174,15 +201,33 @@ export async function getMe(): Promise<User> {
   const token = getStoredToken()
   if (!token) return Promise.reject(new Error('Not logged in'))
   const url = `${getBaseUrl()}/api/auth/me`
-  const res = await fetch(url, {
-    headers: {
-      'Accept': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
-  })
-  if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))).detail || res.statusText
-    throw new Error(typeof err === 'string' ? err : JSON.stringify(err))
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), AUTH_TIMEOUT_MS)
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({}))).detail || res.statusText
+      throw new Error(typeof err === 'string' ? err : JSON.stringify(err))
+    }
+    return res.json() as Promise<User>
+  } catch (err) {
+    clearTimeout(timeoutId)
+    if (err instanceof Error && err.name === 'AbortError') {
+      const base = getBaseUrl()
+      const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)/.test(base)
+      throw new Error(
+        isLocal
+          ? 'Request timed out. Make sure the backend is running (e.g. uvicorn app.main:app --reload from the backend folder).'
+          : 'Request timed out. The server may be slow or unreachable.'
+      )
+    }
+    throw err
   }
-  return res.json() as Promise<User>
 }

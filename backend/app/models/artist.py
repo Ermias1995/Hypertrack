@@ -1,8 +1,10 @@
-from sqlalchemy import Column, Integer, String, DateTime, Enum
+import enum
+
+from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+
 from app.db.session import Base
-import enum
 
 
 class RefreshTier(str, enum.Enum):
@@ -13,9 +15,11 @@ class RefreshTier(str, enum.Enum):
 
 class Artist(Base):
     __tablename__ = "artists"
+    __table_args__ = (UniqueConstraint("user_id", "spotify_artist_id", name="uq_artist_user_spotify_id"),)
 
     id = Column(Integer, primary_key=True, index=True)
-    spotify_artist_id = Column(String, unique=True, index=True, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    spotify_artist_id = Column(String, index=True, nullable=False)
     name = Column(String, nullable=False)
     spotify_url = Column(String, nullable=False)
     image_url = Column(String, nullable=True)

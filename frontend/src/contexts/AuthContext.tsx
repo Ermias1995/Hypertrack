@@ -43,8 +43,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const res = await apiLogin(email, password)
     setStoredToken(res.access_token)
     setToken(res.access_token)
-    const u = await getMe()
-    setUser(u)
+    if (res.user) {
+      setUser(res.user)
+    } else {
+      const u = await getMe()
+      setUser(u)
+    }
   }, [])
 
   const logout = useCallback(() => {
@@ -54,9 +58,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const signup = useCallback(async (email: string, password: string) => {
-    await apiSignup(email, password)
-    await login(email, password)
-  }, [login])
+    const res = await apiSignup(email, password)
+    setStoredToken(res.access_token)
+    setToken(res.access_token)
+    if (res.user) {
+      setUser(res.user)
+    } else {
+      const u = await getMe()
+      setUser(u)
+    }
+  }, [])
 
   const value: AuthContextValue = { user, token, loading, login, logout, signup }
 

@@ -1,16 +1,27 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from app.core.security import get_current_user
 from app.db.session import get_db
 from app.models.artist import Artist
-from app.models.snapshot import Snapshot
 from app.models.placement import Placement
 from app.models.playlist import Playlist
-from app.schemas.artist import ArtistCreate, ArtistCreateFromUrl, ArtistRead, ArtistQueryRequest, ArtistQueryResponse, PlaylistSummary
-from app.schemas.snapshot import SnapshotRead, SnapshotWithChanges
-from app.services.discovery import discover_playlists, get_or_create_playlist
+from app.models.snapshot import Snapshot
+from app.models.user import User
+from app.schemas.artist import (
+    ArtistCreate,
+    ArtistCreateFromUrl,
+    ArtistQueryRequest,
+    ArtistQueryResponse,
+    ArtistRead,
+    PlaylistSummary,
+)
+from app.schemas.snapshot import SnapshotWithChanges
 from app.services.diffing import calculate_changes
+from app.services.discovery import discover_playlists, get_or_create_playlist
 from app.services.spotify_client import get_artist as get_spotify_artist
 
 
@@ -150,8 +161,16 @@ def _run_discovery_and_respond(artist, db, update_name_from_spotify=True):
     summary="Create Artist from URL",
     description="Provide only the artist profile URL (SoundCloud or Spotify). The backend resolves the artist ID and name, creates the artist, and runs playlist discovery. Use this when working with SoundCloud or when you only have a URL.",
 )
-def create_artist_from_url(body: ArtistCreateFromUrl, db: Session = Depends(get_db)):
-    return query_artist(ArtistQueryRequest(spotify_url=body.url.strip(), force_refresh=False), db)
+def create_artist_from_url(
+    body: ArtistCreateFromUrl,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return query_artist(
+        ArtistQueryRequest(spotify_url=body.url.strip(), force_refresh=False),
+        db,
+        current_user,
+    )
 
 
 @router.post(
@@ -160,8 +179,13 @@ def create_artist_from_url(body: ArtistCreateFromUrl, db: Session = Depends(get_
     summary="Create Artist (advanced)",
     description="Manually provide provider ID, name, and URL. For SoundCloud: use SoundCloud user ID as spotify_artist_id and SoundCloud URL as spotify_url. Prefer POST /api/artists/from-url when you only have a URL.",
 )
-def create_artist(payload: ArtistCreate, db: Session = Depends(get_db)):
+def create_artist(
+    payload: ArtistCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     artist = Artist(
+        user_id=current_user.id,
         spotify_artist_id=payload.spotify_artist_id,
         name=payload.name,
         spotify_url=payload.spotify_url,
@@ -173,13 +197,24 @@ def create_artist(payload: ArtistCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/", response_model=list[ArtistRead])
-def list_artists(db: Session = Depends(get_db)):
-    return db.query(Artist).all()
+def list_artists(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return db.query(Artist).filter(Artist.user_id == current_user.id).all()
 
 
 @router.get("/{artist_id}", response_model=ArtistRead)
-def get_artist(artist_id: int, db: Session = Depends(get_db)):
-    artist = db.query(Artist).filter(Artist.id == artist_id).first()
+def get_artist(
+    artist_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    artist = (
+        db.query(Artist)
+        .filter(Artist.id == artist_id, Artist.user_id == current_user.id)
+        .first()
+    )
     if not artist:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -189,8 +224,16 @@ def get_artist(artist_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{artist_id}/history", response_model=list[SnapshotWithChanges])
-def get_artist_history(artist_id: int, db: Session = Depends(get_db)):
-    artist = db.query(Artist).filter(Artist.id == artist_id).first()
+def get_artist_history(
+    artist_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    artist = (
+        db.query(Artist)
+        .filter(Artist.id == artist_id, Artist.user_id == current_user.id)
+        .first()
+    )
     if not artist:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -227,8 +270,16 @@ def get_artist_history(artist_id: int, db: Session = Depends(get_db)):
     summary="Get Artist Playlists",
     description="Returns playlists from the latest snapshot for this artist. The `artist_id` is the **internal database ID** (from `GET /api/artists/` or the `artist.id` in `POST /api/artists/query`), not the SoundCloud/Spotify artist ID.",
 )
-def get_artist_playlists(artist_id: int, db: Session = Depends(get_db)):
-    artist = db.query(Artist).filter(Artist.id == artist_id).first()
+def get_artist_playlists(
+    artist_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    artist = (
+        db.query(Artist)
+        .filter(Artist.id == artist_id, Artist.user_id == current_user.id)
+        .first()
+    )
     if not artist:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -252,8 +303,16 @@ def get_artist_playlists(artist_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{artist_id}/refresh", response_model=ArtistQueryResponse)
-def refresh_artist(artist_id: int, db: Session = Depends(get_db)):
-    artist = db.query(Artist).filter(Artist.id == artist_id).first()
+def refresh_artist(
+    artist_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    artist = (
+        db.query(Artist)
+        .filter(Artist.id == artist_id, Artist.user_id == current_user.id)
+        .first()
+    )
     if not artist:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -263,16 +322,20 @@ def refresh_artist(artist_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/query", response_model=ArtistQueryResponse)
-def query_artist(payload: ArtistQueryRequest, db: Session = Depends(get_db)):
+def query_artist(
+    payload: ArtistQueryRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     from app.core.provider import get_effective_provider
     from app.services.soundcloud_client import resolve_soundcloud_url
-    
+
     url = payload.spotify_url.strip()
-    
+
     # Detect provider and extract artist ID
     provider = get_effective_provider()
     artist_id = None
-    
+
     # Check if it's a SoundCloud URL
     if "soundcloud.com" in url.lower() or "on.soundcloud.com" in url.lower():
         if provider == "soundcloud":
@@ -297,37 +360,26 @@ def query_artist(payload: ArtistQueryRequest, db: Session = Depends(get_db)):
         # Assume it's a direct ID (for backward compatibility)
         artist_id = url.rstrip("/").split("/")[-1].split("?")[0]
 
+    if not (artist_id and str(artist_id).strip()):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid URL: could not extract artist ID",
+        )
+    artist_id = str(artist_id).strip()
+
     artist = (
         db.query(Artist)
-        .filter(Artist.spotify_artist_id == artist_id)
+        .filter(
+            Artist.spotify_artist_id == artist_id,
+            Artist.user_id == current_user.id,
+        )
         .first()
     )
 
     if artist and not payload.force_refresh:
-        previous_snapshot = (
-            db.query(Snapshot)
-            .filter(Snapshot.artist_id == artist.id)
-            .order_by(Snapshot.snapshot_time.desc())
-            .first()
-        )
-        
-        current_placements = (
-            db.query(Placement)
-            .filter(Placement.artist_id == artist.id)
-            .filter(Placement.snapshot_id == previous_snapshot.id)
-            .all() if previous_snapshot else []
-        )
-        current_playlists = _placements_to_summaries(current_placements, db)
-
-        return ArtistQueryResponse(
-            artist=artist,
-            snapshot={
-                "id": previous_snapshot.id if previous_snapshot else None,
-                "snapshot_time": previous_snapshot.snapshot_time if previous_snapshot else None,
-                "total_playlists_found": previous_snapshot.total_playlists_found if previous_snapshot else 0,
-            },
-            changes={"gained": [], "lost": []},
-            current_playlists=current_playlists,
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Artist already in your list.",
         )
 
     try:
@@ -340,13 +392,43 @@ def query_artist(payload: ArtistQueryRequest, db: Session = Depends(get_db)):
 
     if not artist:
         artist = Artist(
+            user_id=current_user.id,
             spotify_artist_id=artist_id,
             name=artist_name,
             spotify_url=url,
             image_url=artist_image_url,
         )
         db.add(artist)
-        db.flush()
+        try:
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            db.expunge(artist)
+            existing = db.query(Artist).filter(Artist.spotify_artist_id == artist_id).first()
+            if not existing:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Artist already exists.",
+                )
+            if existing.user_id is None:
+                existing.user_id = current_user.id
+                existing.name = artist_name
+                existing.spotify_url = url
+                if artist_image_url:
+                    existing.image_url = artist_image_url
+                db.commit()
+                db.refresh(existing)
+                artist = existing
+            elif existing.user_id == current_user.id:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Artist already in your list.",
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Artist already tracked by another account.",
+                )
 
     if payload.force_refresh:
         artist.name = artist_name
@@ -355,5 +437,16 @@ def query_artist(payload: ArtistQueryRequest, db: Session = Depends(get_db)):
             artist.image_url = artist_image_url
         artist.updated_at = datetime.now(timezone.utc)  # Explicitly set updated_at on update
 
-    return _run_discovery_and_respond(artist, db, update_name_from_spotify=True)
+    try:
+        return _run_discovery_and_respond(artist, db, update_name_from_spotify=True)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(e) or "Music API credentials not configured",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to fetch artist or discover playlists. Check provider credentials and URL.",
+        )
 
