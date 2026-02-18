@@ -14,6 +14,11 @@ export interface Artist {
   name: string
   spotify_url: string
   image_url: string | null
+  /** Dashboard summary (from list endpoint) */
+  last_snapshot_at?: string | null
+  last_playlist_count?: number | null
+  last_gained_count?: number | null
+  last_lost_count?: number | null
 }
 
 export interface PlaylistSummary {

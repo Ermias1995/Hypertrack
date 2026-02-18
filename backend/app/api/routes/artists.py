@@ -14,6 +14,7 @@ from app.models.user import User
 from app.schemas.artist import (
     ArtistCreate,
     ArtistCreateFromUrl,
+    ArtistListEntry,
     ArtistQueryRequest,
     ArtistQueryResponse,
     ArtistRead,
@@ -196,12 +197,48 @@ def create_artist(
     return artist
 
 
-@router.get("/", response_model=list[ArtistRead])
+@router.get("/", response_model=list[ArtistListEntry])
 def list_artists(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return db.query(Artist).filter(Artist.user_id == current_user.id).all()
+    artists = db.query(Artist).filter(Artist.user_id == current_user.id).all()
+    result = []
+    for artist in artists:
+        last_snap = (
+            db.query(Snapshot)
+            .filter(Snapshot.artist_id == artist.id)
+            .order_by(Snapshot.snapshot_time.desc())
+            .first()
+        )
+        prev_snap = None
+        if last_snap:
+            prev_snap = (
+                db.query(Snapshot)
+                .filter(Snapshot.artist_id == artist.id)
+                .order_by(Snapshot.snapshot_time.desc())
+                .offset(1)
+                .first()
+            )
+        gained_ids, lost_ids = (
+            calculate_changes(prev_snap.id if prev_snap else None, last_snap.id, db)
+            if last_snap
+            else ([], [])
+        )
+        result.append(
+            ArtistListEntry(
+                id=artist.id,
+                spotify_artist_id=artist.spotify_artist_id,
+                name=artist.name,
+                spotify_url=artist.spotify_url,
+                image_url=artist.image_url,
+                last_snapshot_at=artist.last_snapshot_at,
+                last_playlist_count=last_snap.total_playlists_found if last_snap else None,
+                last_gained_count=len(gained_ids) if last_snap else None,
+                last_lost_count=len(lost_ids) if last_snap else None,
+            )
+        )
+    return result
 
 
 @router.get("/{artist_id}", response_model=ArtistRead)

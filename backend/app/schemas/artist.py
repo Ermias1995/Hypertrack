@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel, Field
 
 
@@ -21,6 +22,18 @@ class ArtistCreate(ArtistBase):
 
 class ArtistRead(ArtistBase):
     id: int
+
+    class Config:
+        from_attributes = True
+
+
+class ArtistListEntry(ArtistBase):
+    """Artist with dashboard summary (last snapshot time, playlist count, gained/lost)."""
+    id: int
+    last_snapshot_at: datetime | None = None
+    last_playlist_count: int | None = None
+    last_gained_count: int | None = None
+    last_lost_count: int | None = None
 
     class Config:
         from_attributes = True
